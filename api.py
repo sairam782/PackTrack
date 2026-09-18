@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Optional
   
@@ -7,7 +8,9 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from config import cfg
-from db import Box, BoxStatus, Station, Supplier, get_session, init_db
+from db import (
+    Box, BoxStatus, SessionLocal, Station, Supplier, get_session, init_db,
+)
 
 
 class ScanIn(BaseModel):
@@ -51,14 +54,11 @@ class BoxUpdate(BaseModel):
     status: BoxStatus
 
 
-app = FastAPI(title="PackTrack API")
-
-
-@app.on_event("startup")
-def _startup() -> None:
+@asynccontextmanager
+async def lifespan(_: FastAPI):
     init_db()
     # Seed the configured stations so /scan doesn't fail on unknown FKs.
-    session = next(get_session())
+    session = SessionLocal()
     try:
         for station_id, cam in cfg.cameras.items():
             if not session.get(Station, station_id):
@@ -70,6 +70,10 @@ def _startup() -> None:
         session.commit()
     finally:
         session.close()
+    yield
+
+
+app = FastAPI(title="PackTrack API", lifespan=lifespan)
 
 
 def _get_or_create_supplier(session: Session, name: Optional[str]) -> Optional[Supplier]:

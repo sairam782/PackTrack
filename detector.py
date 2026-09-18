@@ -8,6 +8,10 @@ from config import cfg
 log = logging.getLogger(__name__)
  
 
+class DetectorUnavailable(RuntimeError):
+    """YOLO extras are not installed; callers may fall back to whole-frame decode."""
+
+
 @dataclass
 class Detection:
     x: int
@@ -34,7 +38,14 @@ class BoxDetector:
 
     def _load(self):
         if self._model is None:
-            from ultralytics import YOLO  # local import: heavy dep
+            try:
+                from ultralytics import YOLO  # local import: heavy dep
+            except ModuleNotFoundError as e:
+                raise DetectorUnavailable(
+                    "ultralytics is not installed. Either install the detection "
+                    "extras (pip install -r requirements-detect.txt) or run the "
+                    "pipeline with --no-detect to decode whole frames."
+                ) from e
             log.info("loading YOLO weights: %s", self.weights)
             self._model = YOLO(self.weights)
         return self._model

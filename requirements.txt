@@ -4,8 +4,8 @@ sqlalchemy==2.0.35
 pydantic==2.9.2
 pyzbar==0.1.9
 opencv-python==4.10.0.84
-ultralytics==8.3.0
 numpy==1.26.4
+pandas==2.2.3
 streamlit==1.39.0
 requests==2.32.3
-python-multipart==0.0.12
+qrcode[pil]==7.4.2

@@ -4,5 +4,5 @@ __pycache__/
 .venv/
 venv/
 *.pt
-test_qr.png
+testdata/
 .DS_Store
