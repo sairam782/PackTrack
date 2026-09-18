@@ -2,7 +2,7 @@ import logging
 import time
 from contextlib import contextmanager
 
-import cv2
+import cv2 
 
 log = logging.getLogger(__name__)
 

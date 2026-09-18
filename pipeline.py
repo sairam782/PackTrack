@@ -10,7 +10,7 @@ from decoder import decode_region
 from detector import BoxDetector, crop
 
 log = logging.getLogger(__name__)
-
+ 
 
 def _post_scan(box_id, station_id, supplier, part, bbox) -> None:
     payload = {

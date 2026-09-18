@@ -6,7 +6,7 @@ from config import cfg
 
 st.set_page_config(page_title="PackTrack", layout="wide")
 st.title("PackTrack — Factory Box Tracker")
-
+ 
 
 @st.cache_data(ttl=5)
 def _fetch(path: str, **params):

@@ -1,7 +1,7 @@
 import os
 from dataclasses import dataclass, field
-
-
+ 
+ 
 @dataclass
 class Config:
     db_url: str = os.getenv("PACKTRACK_DB_URL", "sqlite:///./packtrack.db")

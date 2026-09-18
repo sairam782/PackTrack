@@ -6,7 +6,7 @@ import numpy as np
 from config import cfg
 
 log = logging.getLogger(__name__)
-
+ 
 
 @dataclass
 class Detection:

@@ -7,7 +7,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import DeclarativeBase, relationship, sessionmaker
 
 from config import cfg
-
+ 
 
 class BoxStatus(str, Enum):
     ACTIVE = "active"

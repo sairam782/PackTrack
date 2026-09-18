@@ -8,7 +8,7 @@ import numpy as np
 from pyzbar import pyzbar
 
 log = logging.getLogger(__name__)
-
+ 
 
 @dataclass
 class DecodedBox:
