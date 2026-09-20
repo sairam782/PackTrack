@@ -21,17 +21,17 @@ for _ in $(seq 1 40); do
   sleep 0.25
 done
 
-echo "1/4 rendering test frame"
+echo "1/5 rendering test frame"
 $PY tools/make_test_qr.py --scene --out testdata/scene.png >/dev/null
 
-echo "2/4 running pipeline"
+echo "2/5 running pipeline"
 $PY pipeline.py --station STATION-01 --source testdata/scene.png --no-detect 2>&1 | tail -1
 
-echo "3/4 marking B001 empty"
+echo "3/5 marking B001 empty"
 curl -sf -X PATCH "http://127.0.0.1:${PORT}/boxes/B001" \
   -H 'Content-Type: application/json' -d '{"status":"empty"}' >/dev/null
 
-echo "4/4 asserting"
+echo "4/5 asserting image pipeline"
 $PY - <<'EOF'
 import os, sys, requests
 base = os.environ["PACKTRACK_API_BASE_URL"]
@@ -54,6 +54,33 @@ for name, ok in checks:
     print(f"  {'PASS' if ok else 'FAIL'}  {name}")
 if failed:
     sys.exit(1)
+EOF
+
+# Runs last: re-sighting these boxes on video moves them to another station,
+# which would invalidate the station assertions above.
+echo "5/5 sampling a video file"
+$PY tools/make_test_qr.py --video --out testdata/station.mp4 >/dev/null
+# A 9s clip at a 2s interval must sample a few frames and finish fast -- this
+# used to sleep between frames and would have taken minutes.
+VIDEO_START=$(date +%s)
+PACKTRACK_SCAN_INTERVAL=2 $PY pipeline.py --station STATION-VIDEO \
+  --source testdata/station.mp4 --no-detect 2>&1 | tail -1
+VIDEO_ELAPSED=$(( $(date +%s) - VIDEO_START ))
+if [ "$VIDEO_ELAPSED" -gt 30 ]; then
+  echo "  FAIL  video sampling took ${VIDEO_ELAPSED}s (expected well under 30s)"
+  exit 1
+fi
+echo "  PASS  video walked in ${VIDEO_ELAPSED}s"
+
+$PY - <<'EOF'
+import os, sys, requests
+base = os.environ["PACKTRACK_API_BASE_URL"]
+boxes = requests.get(f"{base}/boxes", timeout=5).json()
+moved = [b for b in boxes if b["station_id"] == "STATION-VIDEO"]
+ok = len(boxes) == 3 and len(moved) >= 2
+print(f"  {'PASS' if ok else 'FAIL'}  video re-sighting moved boxes without duplicating "
+      f"({len(boxes)} boxes, {len(moved)} at STATION-VIDEO)")
+sys.exit(0 if ok else 1)
 EOF
 
 echo "SMOKE TEST PASSED"

@@ -44,14 +44,42 @@ def build_scene(boxes, width=1280, height=720) -> np.ndarray:
     return scene
 
 
+def build_video(path: Path, boxes, seconds=9, fps=10, width=1280, height=720) -> int:
+    """Render a fixed-camera clip where boxes accumulate at the station over time."""
+    writer = cv2.VideoWriter(
+        str(path), cv2.VideoWriter_fourcc(*"mp4v"), fps, (width, height)
+    )
+    if not writer.isOpened():
+        raise RuntimeError(f"could not open video writer for {path}")
+
+    total = seconds * fps
+    try:
+        for i in range(total):
+            # Reveal one more box every `seconds/len(boxes)` seconds.
+            visible = min(len(boxes), 1 + (i * len(boxes)) // total)
+            writer.write(build_scene(boxes[:visible], width, height))
+    finally:
+        writer.release()
+    return total
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--scene", action="store_true", help="render a multi-box frame")
+    parser.add_argument("--video", action="store_true", help="render a multi-box clip")
     parser.add_argument("--box-id", default="B001")
     parser.add_argument("--supplier", default="SupplierA")
     parser.add_argument("--part", default="M6 Bolt")
     parser.add_argument("--out", default=None)
     args = parser.parse_args()
+
+    if args.video:
+        out = Path(args.out or "testdata/station.mp4")
+        out.parent.mkdir(parents=True, exist_ok=True)
+        frames = build_video(out, DEFAULT_BOXES)
+        print(f"wrote {out}: {frames} frames, boxes appearing over time "
+              f"({', '.join(b['box_id'] for b in DEFAULT_BOXES)})")
+        return
 
     if args.scene:
         out = Path(args.out or "testdata/scene.png")
