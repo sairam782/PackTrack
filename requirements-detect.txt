@@ -1,0 +1,5 @@
+# YOLO detection extras. Large (~2GB, pulls PyTorch) and only needed once you
+# want box-region detection rather than whole-frame barcode decoding.
+#   pip install -r requirements-detect.txt
+-r requirements.txt
+ultralytics==8.3.0
