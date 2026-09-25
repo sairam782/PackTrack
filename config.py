@@ -1,5 +1,42 @@
+import json
 import os
 from dataclasses import dataclass, field
+
+DEFAULT_CAMERAS = {"STATION-01": 0}
+
+
+def _coerce_source(value):
+    """USB indices stay ints; paths and RTSP/HTTP URLs stay strings."""
+    if isinstance(value, int):
+        return value
+    text = str(value).strip()
+    return int(text) if text.isdigit() else text
+
+
+def _load_cameras() -> dict:
+    """Read the station -> source map from PACKTRACK_CAMERAS.
+
+    Accepts JSON ({"STATION-01": 0, "STATION-02": "rtsp://..."}) or a compact
+    comma-separated form (STATION-01=0,STATION-02=/clips/line2.mp4).
+    """
+    raw = os.getenv("PACKTRACK_CAMERAS", "").strip()
+    if not raw:
+        return dict(DEFAULT_CAMERAS)
+
+    if raw.startswith("{"):
+        return {k: _coerce_source(v) for k, v in json.loads(raw).items()}
+
+    cameras = {}
+    for pair in raw.split(","):
+        if not pair.strip():
+            continue
+        station, _, source = pair.partition("=")
+        if not source:
+            raise ValueError(
+                f"malformed PACKTRACK_CAMERAS entry {pair!r}; expected STATION=source"
+            )
+        cameras[station.strip()] = _coerce_source(source)
+    return cameras
  
  
 @dataclass
@@ -12,9 +49,7 @@ class Config:
 
     # Camera sources: station_id -> OpenCV VideoCapture source.
     # Ints are USB device indices; strings are RTSP URLs or file paths.
-    cameras: dict = field(default_factory=lambda: {
-        "STATION-01": int(os.getenv("PACKTRACK_CAM_0", "0")),
-    })
+    cameras: dict = field(default_factory=lambda: _load_cameras())
 
     scan_interval_s: float = float(os.getenv("PACKTRACK_SCAN_INTERVAL", "5.0"))
 

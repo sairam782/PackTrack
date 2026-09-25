@@ -1,6 +1,7 @@
 import argparse
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
 
@@ -73,10 +74,39 @@ def run_station(station_id: str, source, detect: bool = True, once: bool = False
     return total
 
 
+def run_stations(stations: dict, detect: bool = True, once: bool = False) -> int:
+    """Run every configured station concurrently in one process.
+
+    Capture is I/O bound (waiting on cameras, then on the API), so threads are
+    enough -- no need for the queues or extra services the prototype rules out.
+    """
+    if len(stations) == 1:
+        (station_id, source), = stations.items()
+        return run_station(station_id, source, detect=detect, once=once)
+
+    total = 0
+    with ThreadPoolExecutor(max_workers=len(stations)) as pool:
+        futures = {
+            pool.submit(run_station, sid, src, detect, once): sid
+            for sid, src in stations.items()
+        }
+        for fut in as_completed(futures):
+            station_id = futures[fut]
+            try:
+                total += fut.result()
+            except Exception:
+                # One bad camera must not take down the other stations.
+                log.exception("station %s failed", station_id)
+    return total
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     parser = argparse.ArgumentParser(description="PackTrack capture pipeline")
-    parser.add_argument("--station", default=None, help="station id (default: first in config)")
+    parser.add_argument(
+        "--station", default=None,
+        help="run only this station id (default: every station in config)",
+    )
     parser.add_argument(
         "--source", default=None,
         help="override camera source: USB index, RTSP URL, or path to a video/image",
@@ -86,13 +116,24 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.station:
-        station_id = args.station
-        source = args.source if args.source is not None else cfg.cameras[station_id]
+        if args.source is None and args.station not in cfg.cameras:
+            parser.error(
+                f"unknown station {args.station!r}; configured: "
+                f"{', '.join(cfg.cameras) or '(none)'}. Pass --source to override."
+            )
+        source = args.source if args.source is not None else cfg.cameras[args.station]
+        stations = {args.station: source}
+    elif args.source is not None:
+        station_id = next(iter(cfg.cameras), "STATION-01")
+        stations = {station_id: args.source}
     else:
-        station_id, default_source = next(iter(cfg.cameras.items()))
-        source = args.source if args.source is not None else default_source
+        stations = dict(cfg.cameras)
 
-    total = run_station(station_id, source, detect=not args.no_detect, once=args.once)
+    if not stations:
+        parser.error("no cameras configured; set PACKTRACK_CAMERAS or pass --source")
+
+    log.info("starting %d station(s): %s", len(stations), ", ".join(stations))
+    total = run_stations(stations, detect=not args.no_detect, once=args.once)
     log.info("done: %d boxes logged", total)
 
 

@@ -21,17 +21,17 @@ for _ in $(seq 1 40); do
   sleep 0.25
 done
 
-echo "1/5 rendering test frame"
+echo "1/6 rendering test frame"
 $PY tools/make_test_qr.py --scene --out testdata/scene.png >/dev/null
 
-echo "2/5 running pipeline"
+echo "2/6 running pipeline"
 $PY pipeline.py --station STATION-01 --source testdata/scene.png --no-detect 2>&1 | tail -1
 
-echo "3/5 marking B001 empty"
+echo "3/6 marking B001 empty"
 curl -sf -X PATCH "http://127.0.0.1:${PORT}/boxes/B001" \
   -H 'Content-Type: application/json' -d '{"status":"empty"}' >/dev/null
 
-echo "4/5 asserting image pipeline"
+echo "4/6 asserting image pipeline"
 $PY - <<'EOF'
 import os, sys, requests
 base = os.environ["PACKTRACK_API_BASE_URL"]
@@ -58,7 +58,7 @@ EOF
 
 # Runs last: re-sighting these boxes on video moves them to another station,
 # which would invalidate the station assertions above.
-echo "5/5 sampling a video file"
+echo "5/6 sampling a video file"
 $PY tools/make_test_qr.py --video --out testdata/station.mp4 >/dev/null
 # A 9s clip at a 2s interval must sample a few frames and finish fast -- this
 # used to sleep between frames and would have taken minutes.
@@ -82,5 +82,22 @@ print(f"  {'PASS' if ok else 'FAIL'}  video re-sighting moved boxes without dupl
       f"({len(boxes)} boxes, {len(moved)} at STATION-VIDEO)")
 sys.exit(0 if ok else 1)
 EOF
+
+echo "6/6 running two stations concurrently from config"
+# Both stations decode the same box ids, so the last writer wins in the DB and
+# station rows cannot prove both ran. Assert on the pipeline's own log instead.
+MULTI_LOG=$(PACKTRACK_CAMERAS="LINE-A=testdata/station.mp4,LINE-B=testdata/scene.png" \
+  PACKTRACK_SCAN_INTERVAL=3 $PY pipeline.py --no-detect 2>&1)
+
+MULTI_FAIL=0
+for station in LINE-A LINE-B; do
+  if printf '%s' "$MULTI_LOG" | grep -q "station ${station}: [0-9]* boxes logged"; then
+    echo "  PASS  ${station} captured frames"
+  else
+    echo "  FAIL  ${station} never logged a frame"
+    MULTI_FAIL=1
+  fi
+done
+[ "$MULTI_FAIL" -eq 0 ] || exit 1
 
 echo "SMOKE TEST PASSED"
