@@ -31,9 +31,12 @@ class BoxDetector:
         class_ids: tuple[int, ...] | None = None,
         confidence: float | None = None,
     ):
-        self.weights = weights or cfg.yolo_weights
-        self.class_ids = class_ids or cfg.box_class_ids
-        self.confidence = confidence or cfg.yolo_confidence
+        # Explicit None checks: an empty class_ids tuple means "keep every
+        # class" and a confidence of 0.0 is legitimate, so `or` would silently
+        # replace both with the configured defaults.
+        self.weights = cfg.yolo_weights if weights is None else weights
+        self.class_ids = cfg.box_class_ids if class_ids is None else tuple(class_ids)
+        self.confidence = cfg.yolo_confidence if confidence is None else confidence
         self._model = None
 
     def _load(self):

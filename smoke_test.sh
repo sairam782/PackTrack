@@ -21,17 +21,17 @@ for _ in $(seq 1 40); do
   sleep 0.25
 done
 
-echo "1/6 rendering test frame"
+echo "1/7 rendering test frame"
 $PY tools/make_test_qr.py --scene --out testdata/scene.png >/dev/null
 
-echo "2/6 running pipeline"
+echo "2/7 running pipeline"
 $PY pipeline.py --station STATION-01 --source testdata/scene.png --no-detect 2>&1 | tail -1
 
-echo "3/6 marking B001 empty"
+echo "3/7 marking B001 empty"
 curl -sf -X PATCH "http://127.0.0.1:${PORT}/boxes/B001" \
   -H 'Content-Type: application/json' -d '{"status":"empty"}' >/dev/null
 
-echo "4/6 asserting image pipeline"
+echo "4/7 asserting image pipeline"
 $PY - <<'EOF'
 import os, sys, requests
 base = os.environ["PACKTRACK_API_BASE_URL"]
@@ -58,7 +58,7 @@ EOF
 
 # Runs last: re-sighting these boxes on video moves them to another station,
 # which would invalidate the station assertions above.
-echo "5/6 sampling a video file"
+echo "5/7 sampling a video file"
 $PY tools/make_test_qr.py --video --out testdata/station.mp4 >/dev/null
 # A 9s clip at a 2s interval must sample a few frames and finish fast -- this
 # used to sleep between frames and would have taken minutes.
@@ -83,7 +83,7 @@ print(f"  {'PASS' if ok else 'FAIL'}  video re-sighting moved boxes without dupl
 sys.exit(0 if ok else 1)
 EOF
 
-echo "6/6 running two stations concurrently from config"
+echo "6/7 running two stations concurrently from config"
 # Both stations decode the same box ids, so the last writer wins in the DB and
 # station rows cannot prove both ran. Assert on the pipeline's own log instead.
 MULTI_LOG=$(PACKTRACK_CAMERAS="LINE-A=testdata/station.mp4,LINE-B=testdata/scene.png" \
@@ -99,5 +99,51 @@ for station in LINE-A LINE-B; do
   fi
 done
 [ "$MULTI_FAIL" -eq 0 ] || exit 1
+
+echo "7/7 YOLO detect -> crop -> decode"
+if ! $PY -c "import ultralytics" 2>/dev/null; then
+  echo "  SKIP  ultralytics not installed (pip install -r requirements-detect.txt)"
+else
+  # COCO cannot find packaging boxes, so this asserts the detect/crop/decode
+  # wiring and bbox persistence, not detection quality: a QR is pasted inside a
+  # real detection and must come back decoded with its bounding box.
+  $PY - <<'EOF'
+import sys
+sys.path.insert(0, "tools")
+import cv2
+from detector import BoxDetector, crop
+from make_test_qr import qr_array
+
+asset = next(p for p in __import__("pathlib").Path(".venv").rglob("assets/bus.jpg"))
+frame = cv2.imread(str(asset))
+det = BoxDetector(class_ids=(), confidence=0.25)
+dets = det.detect(frame)
+if not dets:
+    print("  FAIL  YOLO found nothing in its own test asset")
+    sys.exit(1)
+big = max(dets, key=lambda d: d.w * d.h)
+qr = cv2.cvtColor(qr_array({"box_id": "B900", "supplier": "SupplierZ", "part": "Bracket"}, 180),
+                  cv2.COLOR_GRAY2BGR)
+y, x = big.y + big.h // 2 - 90, big.x + big.w // 2 - 90
+frame[y:y + 180, x:x + 180] = qr
+cv2.imwrite("testdata/yolo_integration.png", frame)
+print(f"  PASS  YOLO returned {len(dets)} detections")
+EOF
+  [ $? -eq 0 ] || exit 1
+
+  PACKTRACK_BOX_CLASSES=all $PY pipeline.py --station STATION-YOLO \
+    --source testdata/yolo_integration.png >/dev/null 2>&1
+
+  $PY - <<'EOF'
+import os, sys, requests
+base = os.environ["PACKTRACK_API_BASE_URL"]
+rows = requests.get(f"{base}/boxes", params={"station": "STATION-YOLO"}, timeout=5).json()
+hit = next((b for b in rows if b["box_id"] == "B900"), None)
+ok = hit is not None and hit["bbox"] is not None and hit["supplier_name"] == "SupplierZ"
+print(f"  {'PASS' if ok else 'FAIL'}  QR decoded from a YOLO crop with bbox persisted "
+      f"({hit['bbox'] if hit else 'no row'})")
+sys.exit(0 if ok else 1)
+EOF
+fi
 
 echo "SMOKE TEST PASSED"

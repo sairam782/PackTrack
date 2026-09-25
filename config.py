@@ -39,6 +39,15 @@ def _load_cameras() -> dict:
     return cameras
  
  
+def _load_box_classes() -> tuple:
+    raw = os.getenv("PACKTRACK_BOX_CLASSES", "").strip()
+    if not raw:
+        return (73,)
+    if raw.lower() == "all":
+        return ()
+    return tuple(int(part) for part in raw.split(",") if part.strip())
+
+
 @dataclass
 class Config:
     db_url: str = os.getenv("PACKTRACK_DB_URL", "sqlite:///./packtrack.db")
@@ -54,9 +63,11 @@ class Config:
     scan_interval_s: float = float(os.getenv("PACKTRACK_SCAN_INTERVAL", "5.0"))
 
     yolo_weights: str = os.getenv("PACKTRACK_YOLO_WEIGHTS", "yolov8n.pt")
-    # COCO class ids we treat as "box-like" until a custom model is trained.
-    # 73 = book, 63 = laptop are placeholders; adjust once a real model exists.
-    box_class_ids: tuple = (73,)
+    # Class ids treated as "box-like". Defaults to COCO 73 (book), the nearest
+    # rectangular stand-in until a custom box model is trained -- it will not
+    # reliably find real packaging. Set PACKTRACK_BOX_CLASSES to a comma list,
+    # or to "all" to keep every class the model reports.
+    box_class_ids: tuple = field(default_factory=lambda: _load_box_classes())
     yolo_confidence: float = float(os.getenv("PACKTRACK_YOLO_CONF", "0.25"))
 
 
