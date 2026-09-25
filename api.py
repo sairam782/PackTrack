@@ -96,6 +96,20 @@ def _get_or_create_station(session: Session, station_id: str) -> Station:
     return station
 
 
+@app.get("/")
+def index() -> dict:
+    return {
+        "service": "PackTrack API",
+        "docs": "/docs",
+        "endpoints": {
+            "POST /scan": "log a decoded box",
+            "GET /boxes": "list boxes (filters: station, supplier, status)",
+            "PATCH /boxes/{box_id}": "update status",
+            "GET /dashboard": "summary stats and supplier pickup queue",
+        },
+    }
+
+
 @app.post("/scan", response_model=BoxOut)
 def scan(payload: ScanIn, session: Session = Depends(get_session)) -> BoxOut:
     _get_or_create_station(session, payload.station_id)
