@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PackTrack — Live Floor</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233987e5' stroke-width='2' stroke-linejoin='round'%3E%3Cpath d='M3 8l9-5 9 5v8l-9 5-9-5z'/%3E%3Cpath d='M3 8l9 5 9-5'/%3E%3Cpath d='M12 13v8'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --bg:#0a0c10; --surface:#12161d; --surface-2:#171c25; --surface-3:#1e2430;
+  --border:#252c3a; --border-soft:#1c222d;
+  --text:#e9edf4; --dim:#9aa5b8; --faint:#6b7689;
+  --accent:#3987e5;
+  /* Validated categorical steps for the dark surface: in = green, out = blue.
+     Two categories only, so identity never rests on a near-miss hue. */
+  --in:#00a300; --out:#3987e5; --warn:#c98500; --bad:#d55181;
+  --radius:14px; --radius-sm:9px;
+  --sans:"Inter",system-ui,-apple-system,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,monospace;
+}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:15px;line-height:1.55;
+  background-image:radial-gradient(1100px 500px at 15% -10%,#161d2b 0%,transparent 60%),radial-gradient(900px 420px at 95% 0%,#111a24 0%,transparent 55%);
+  background-attachment:fixed;-webkit-font-smoothing:antialiased}
+h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.02em}
+button{font:inherit;color:inherit;cursor:pointer;border:none;background:none}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+.shell{max-width:1400px;margin:0 auto;padding:0 24px 80px}
+
+/* header */
+.top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:22px 0 18px}
+.brand{display:flex;align-items:center;gap:11px;font-size:1.15rem;font-weight:700;letter-spacing:-.03em}
+.brand .mark{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;
+  background:linear-gradient(140deg,var(--out),#1d5fa8);box-shadow:0 6px 18px -8px var(--out)}
+.spacer{flex:1}
+.pill{font-family:var(--mono);font-size:.68rem;letter-spacing:.06em;padding:5px 11px;border-radius:999px;
+  border:1px solid var(--border);color:var(--faint);background:var(--surface);white-space:nowrap}
+.pill.live{color:var(--in);border-color:color-mix(in srgb,var(--in) 40%,transparent)}
+.pill.warnish{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 40%,transparent)}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:currentColor;margin-right:7px;
+  animation:pulse 2.2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.btn{padding:8px 15px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface);
+  color:var(--dim);font-size:.85rem;transition:.15s}
+.btn:hover{color:var(--text);border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.btn.primary:hover{filter:brightness(1.12)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* kpi */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:18px}
+.kpi{position:relative;padding:18px 20px;border-radius:var(--radius);border:1px solid var(--border);
+  background:linear-gradient(160deg,var(--surface-2),var(--surface));overflow:hidden}
+.kpi::after{content:"";position:absolute;inset:0 auto 0 0;width:3px;background:var(--tone,var(--accent))}
+.kpi .label{font-family:var(--mono);font-size:.64rem;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+.kpi .value{font-size:2rem;font-weight:700;letter-spacing:-.04em;margin-top:6px;line-height:1.1;
+  font-variant-numeric:tabular-nums}
+.kpi .sub{font-size:.78rem;color:var(--dim);margin-top:3px}
+
+/* layout */
+.grid{display:grid;grid-template-columns:1.55fr 1fr;gap:16px;align-items:start}
+/* Grid children default to min-width:auto, so the wide table inside would
+   push the whole page sideways instead of scrolling in its own card. */
+.grid > *{min-width:0}
+@media(max-width:1040px){.grid{grid-template-columns:1fr}}
+.card{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);overflow:hidden;margin-bottom:16px}
+.card > header{display:flex;align-items:center;gap:12px;padding:15px 18px;border-bottom:1px solid var(--border-soft);
+  background:var(--surface-2)}
+.card > header h2{font-size:.95rem}
+.card > header .hint{font-family:var(--mono);font-size:.66rem;color:var(--faint);margin-left:auto}
+.card .body{padding:18px}
+
+/* chart */
+.chart{width:100%;height:auto;display:block}
+.chart .grid-line{stroke:var(--border-soft);stroke-width:1}
+.chart .axis{font-family:var(--mono);font-size:9px;fill:var(--faint)}
+.chart rect.bar{transition:.15s}
+.chart g.col:hover rect.bar{filter:brightness(1.25)}
+.legend{display:flex;gap:16px;margin-top:6px;font-size:.78rem;color:var(--dim)}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
+
+/* stations */
+.stations{display:grid;gap:10px}
+.station{display:flex;align-items:center;gap:12px;padding:13px 15px;border-radius:var(--radius-sm);
+  border:1px solid var(--border);background:var(--surface-2)}
+.station .name{font-weight:600;font-size:.92rem}
+.station .role{font-family:var(--mono);font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;
+  padding:3px 8px;border-radius:999px;border:1px solid currentColor}
+.role.inbound{color:var(--in)} .role.outbound{color:var(--out)} .role.both{color:var(--warn)}
+.station .counts{margin-left:auto;font-family:var(--mono);font-size:.78rem;color:var(--dim);white-space:nowrap}
+.station .counts b{font-weight:500}
+
+/* feed */
+.feed{display:flex;flex-direction:column;max-height:380px;overflow-y:auto;scrollbar-width:thin}
+.ev{display:flex;align-items:center;gap:12px;padding:11px 18px;border-bottom:1px solid var(--border-soft);
+  animation:slide .35s ease both}
+@keyframes slide{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:none}}
+.ev:last-child{border-bottom:none}
+.ev .arrow{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font-size:.82rem;font-weight:700;flex:0 0 auto}
+.ev.in .arrow{background:color-mix(in srgb,var(--in) 22%,transparent);color:var(--in)}
+.ev.out .arrow{background:color-mix(in srgb,var(--out) 22%,transparent);color:var(--out)}
+.ev .id{font-family:var(--mono);font-size:.82rem;font-weight:500}
+.ev .meta{margin-left:auto;text-align:right;font-size:.72rem;color:var(--faint);font-family:var(--mono)}
+
+/* table */
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th{text-align:left;font-family:var(--mono);font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--faint);font-weight:400;padding:0 14px 10px;border-bottom:1px solid var(--border-soft)}
+td{padding:11px 14px;border-bottom:1px solid var(--border-soft);color:var(--dim)}
+tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:var(--surface-2)}
+td.id{font-family:var(--mono);color:var(--text);font-weight:500}
+td.num{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+.tag{font-family:var(--mono);font-size:.64rem;letter-spacing:.08em;text-transform:uppercase;padding:3px 9px;
+  border-radius:999px;border:1px solid currentColor;white-space:nowrap}
+.tag.in_stock{color:var(--in)} .tag.departed{color:var(--out)}
+
+/* bars */
+.sup{display:grid;grid-template-columns:1fr;gap:12px}
+.sup-row .head{display:flex;justify-content:space-between;font-size:.84rem;margin-bottom:5px}
+.sup-row .head b{font-weight:500}
+.sup-row .head span{font-family:var(--mono);font-size:.76rem;color:var(--faint)}
+.track{height:9px;border-radius:5px;background:var(--surface-3);overflow:hidden;display:flex}
+.track i{display:block;height:100%;transition:width .5s cubic-bezier(.2,.8,.2,1)}
+
+/* ingest */
+.ingest{display:grid;gap:12px}
+.row{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+select,input[type=number]{padding:8px 11px;border-radius:var(--radius-sm);border:1px solid var(--border);
+  background:var(--surface-2);color:var(--text);font:inherit;font-size:.85rem;outline:none}
+select:focus,input:focus{border-color:var(--accent)}
+label.field{display:flex;flex-direction:column;gap:5px;font-family:var(--mono);font-size:.62rem;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.drop{border:1.5px dashed var(--border);border-radius:var(--radius-sm);padding:18px;text-align:center;
+  color:var(--faint);font-size:.85rem;transition:.15s;cursor:pointer}
+.drop:hover,.drop.over{border-color:var(--accent);color:var(--text);background:var(--surface-2)}
+.progress{height:6px;border-radius:999px;background:var(--surface-3);overflow:hidden}
+.progress i{display:block;height:100%;background:var(--accent);width:0;transition:width .3s}
+.joblist{display:grid;gap:8px}
+.job{display:flex;align-items:center;gap:11px;font-size:.82rem;padding:9px 12px;border-radius:var(--radius-sm);
+  border:1px solid var(--border);background:var(--surface-2)}
+.job .nm{font-family:var(--mono);font-size:.76rem}
+.job .st{margin-left:auto;font-family:var(--mono);font-size:.68rem;color:var(--faint)}
+.job.done .st{color:var(--in)} .job.error .st{color:var(--bad)}
+.empty{color:var(--faint);font-size:.87rem;text-align:center;padding:26px 10px}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);padding:11px 20px;border-radius:999px;
+  background:var(--surface-3);border:1px solid var(--border);font-size:.85rem;opacity:0;pointer-events:none;
+  transition:.25s;z-index:50}
+.toast.show{opacity:1}
+/* The boxes table has seven columns and will not fit a phone. It scrolls
+   inside its own card rather than pushing the whole page sideways. */
+#boxes{overflow-x:auto;-webkit-overflow-scrolling:touch}
+#boxes table{min-width:620px}
+
+@media(max-width:560px){
+  .shell{padding:0 14px 60px}
+  .kpis{grid-template-columns:repeat(2,1fr);gap:10px}
+  .kpi{padding:14px 15px}
+  .kpi .value{font-size:1.55rem}
+  .top{padding:16px 0 14px}
+  .card > header{padding:13px 15px}
+  .card .body{padding:14px}
+  .ev{padding:10px 15px}
+  .row{gap:8px}
+  label.field{flex:1 1 auto;min-width:0}
+  select{max-width:100%}
+}
+
+@media(prefers-reduced-motion:reduce){*{animation-duration:.001ms!important;transition-duration:.001ms!important}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="top">
+    <div class="brand">
+      <span class="mark">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round">
+          <path d="M3 8l9-5 9 5v8l-9 5-9-5z"/><path d="M3 8l9 5 9-5"/><path d="M12 13v8"/>
+        </svg>
+      </span>
+      PackTrack
+    </div>
+    <span class="pill live" id="livePill"><span class="dot"></span>LIVE</span>
+    <span class="pill" id="backendPill">—</span>
+    <span class="spacer"></span>
+    <button class="btn" id="resetBtn">Reset demo</button>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="grid">
+    <div>
+      <section class="card">
+        <header><h2>Box flow</h2><span class="hint" id="flowHint"></span></header>
+        <div class="body"><div id="flow"></div></div>
+      </section>
+
+      <section class="card">
+        <header><h2>Boxes on the floor</h2><span class="hint" id="boxHint"></span></header>
+        <div id="boxes"></div>
+      </section>
+
+      <section class="card">
+        <header><h2>By supplier</h2><span class="hint">on floor vs departed</span></header>
+        <div class="body"><div class="sup" id="suppliers"></div></div>
+      </section>
+    </div>
+
+    <div>
+      <section class="card">
+        <header><h2>Read a clip</h2><span class="hint">video → QR → crossing</span></header>
+        <div class="body ingest">
+          <div class="row">
+            <label class="field">Clip
+              <select id="clipSel"></select>
+            </label>
+            <label class="field">Station
+              <select id="stationSel"></select>
+            </label>
+            <label class="field">Hours ago
+              <input type="number" id="offset" value="3" min="0" max="72" step="0.5" style="width:88px" />
+            </label>
+          </div>
+          <div class="row">
+            <button class="btn primary" id="runBtn">Process clip</button>
+            <button class="btn" id="uploadBtn">Upload your own</button>
+            <input type="file" id="fileInput" accept="video/*" hidden />
+          </div>
+          <div class="drop" id="drop">Drop a video here to read it</div>
+          <div class="progress"><i id="bar"></i></div>
+          <div class="joblist" id="jobs"></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <header><h2>Stations</h2></header>
+        <div class="body"><div class="stations" id="stations"></div></div>
+      </section>
+
+      <section class="card">
+        <header><h2>Live crossings</h2><span class="hint" id="feedHint"></span></header>
+        <div class="feed" id="feed"></div>
+      </section>
+
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script type="module" src="/static/app.js"></script>
+</body>
+</html>

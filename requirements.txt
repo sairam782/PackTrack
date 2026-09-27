@@ -2,10 +2,29 @@ fastapi==0.115.0
 uvicorn[standard]==0.30.6
 sqlalchemy==2.0.35
 pydantic==2.9.2
-pyzbar==0.1.9
-opencv-python==4.10.0.84
-ultralytics==8.3.0
-numpy==1.26.4
-streamlit==1.39.0
-requests==2.32.3
 python-multipart==0.0.12
+requests==2.32.3
+
+# Headless build: the server never opens a window, and the GUI build needs
+# system libraries (libGL) that a plain container does not have.
+opencv-python-headless==4.10.0.84
+numpy==1.26.4
+
+# QR generation for demo footage and printable labels.
+segno==1.6.1
+
+# Optional, and worth installing for real deployments: pyzbar reads more
+# symbologies and is far more reliable than the OpenCV fallback, which cannot
+# read Micro QR at all and misses the occasional standard symbol. It needs the
+# native zbar library:
+#   macOS   brew install zbar
+#   Debian  sudo apt install libzbar0
+# pyzbar==0.1.9
+
+# Optional: object detection, only needed if you want box bounding boxes as
+# well as label reads. Large download.
+# ultralytics==8.3.0
+
+# Optional: the legacy Streamlit view in dashboard.py.
+# streamlit==1.39.0
+# pandas==2.2.3

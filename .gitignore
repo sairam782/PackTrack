@@ -1,8 +1,17 @@
 __pycache__/
-*.pyc
-*.db
+*.py[cod]
 .venv/
 venv/
-*.pt
-test_qr.png
+.pytest_cache/
+.ruff_cache/
+
+# Local database and test artefacts
+packtrack.db
+test_packtrack.db
+
+# Generated demo footage — rebuild with tools/make_demo_video.py
+demo/
+
+*.png
+!docs/*.png
 .DS_Store

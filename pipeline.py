@@ -56,11 +56,17 @@ def run_station(station_id: str, source) -> None:
     for frame in frame_stream(source, cfg.scan_interval_s):
         started = time.monotonic()
         n = process_frame(frame, station_id, detector)
-        log.info("station %s: %d boxes decoded in %.2fs", station_id, n, time.monotonic() - started)
+        log.info(
+            "station %s: %d boxes decoded in %.2fs",
+            station_id, n, time.monotonic() - started,
+        )
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
     parser = argparse.ArgumentParser()
     parser.add_argument("--station", help="station id from config.cameras", default=None)
     args = parser.parse_args()
