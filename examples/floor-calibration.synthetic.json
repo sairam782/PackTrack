@@ -1,0 +1,8 @@
+{
+  "image_size": [1280, 720],
+  "image_points": [[0, 0], [1279, 0], [1279, 719], [0, 719]],
+  "floor_points": [[0, 0], [12.79, 0], [12.79, 7.19], [0, 7.19]],
+  "coordinate_frame": "synthetic-factory-floor",
+  "units": "metres",
+  "plane_height_m": 1.0
+}

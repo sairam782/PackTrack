@@ -1,9 +1,14 @@
 import logging
 import time
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from pathlib import Path
+from queue import Empty, Full, Queue
+import threading
 
 import cv2
+
+from config import cfg
 
 log = logging.getLogger(__name__)
 
@@ -49,8 +54,15 @@ class FrameSource:
         self.cap: "cv2.VideoCapture | None" = None
 
     def open(self) -> None:
-        cap = cv2.VideoCapture(self.source)
+        if is_live_source(self.source) and not isinstance(self.source, int):
+            cap = cv2.VideoCapture(self.source, cv2.CAP_FFMPEG, [
+                cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000,
+                cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000,
+            ])
+        else:
+            cap = cv2.VideoCapture(self.source)
         if not cap.isOpened():
+            cap.release()
             raise RuntimeError(
                 f"could not open camera source: {self.source!r} "
                 "(for a USB webcam on macOS, grant camera permission to your terminal "
@@ -169,12 +181,74 @@ def frame_stream(source, interval_s: float, once: bool = False, loop: bool = Fal
 
     live = is_live_source(source)
     while True:
-        with open_source(source) as src:
-            if live:
-                yield from _stream_live(src, interval_s, once)
-            else:
-                yield from _stream_file(src, interval_s, once)
+        try:
+            with open_source(source) as src:
+                if live:
+                    yield from _stream_live(src, interval_s, once)
+                else:
+                    yield from _stream_file(src, interval_s, once)
+        except (RuntimeError, cv2.error):
+            if not live or once:
+                raise
+            log.exception("live camera unavailable; retrying")
         if once or (not live and not loop):
             return
         if live:
-            log.warning("reconnecting to %r", source)
+            log.warning("reconnecting in %.1fs", cfg.reconnect_delay_s)
+            time.sleep(cfg.reconnect_delay_s)
+
+
+def timed_frame_stream(source, interval_s, stop):
+    """camera tracking capture: timestamp at read time and continuously drain live cameras.
+
+    The producer alone owns the capture handle. A one-frame queue discards old
+    frames while barcode processing runs, without grabbing 120 *new* frames
+    before each observation. None signals a connection gap to reset confirmation.
+    """
+    if not is_live_source(source):
+        for frame in frame_stream(source, interval_s):
+            if stop.is_set():
+                return
+            yield frame, datetime.now(timezone.utc)
+        return
+
+    frames = Queue(maxsize=1)
+    finished = threading.Event()
+
+    def publish(frame):
+        item = (frame, datetime.now(timezone.utc))
+        try:
+            frames.put_nowait(item)
+        except Full:
+            try:
+                frames.get_nowait()
+            except Empty:
+                pass
+            frames.put_nowait(item)
+
+    def read_continuously():
+        while not stop.is_set() and not finished.is_set():
+            try:
+                with open_source(source) as src:
+                    while not stop.is_set() and not finished.is_set():
+                        frame = src.read()
+                        publish(frame)
+                        if frame is None:
+                            break
+            except (RuntimeError, cv2.error):
+                log.warning("camera open/read failed; retrying")
+                publish(None)
+            finished.wait(cfg.reconnect_delay_s)
+
+    reader = threading.Thread(target=read_continuously, daemon=True)
+    reader.start()
+    try:
+        while not stop.is_set():
+            try:
+                yield frames.get(timeout=1)
+            except Empty:
+                yield None, datetime.now(timezone.utc)
+            stop.wait(interval_s)
+    finally:
+        finished.set()
+        reader.join(timeout=1)

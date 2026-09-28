@@ -1,0 +1,32 @@
+[
+  {
+    "box_id": "TEST-001",
+    "supplier": "Acme Components",
+    "part": "M6 Bolts"
+  },
+  {
+    "box_id": "TEST-002",
+    "supplier": "Acme Components",
+    "part": "M8 Washers"
+  },
+  {
+    "box_id": "TEST-003",
+    "supplier": "Northstar Supply",
+    "part": "Brackets"
+  },
+  {
+    "box_id": "TEST-004",
+    "supplier": "Northstar Supply",
+    "part": "Gaskets"
+  },
+  {
+    "box_id": "TEST-005",
+    "supplier": "Summit Industrial",
+    "part": "Spacers"
+  },
+  {
+    "box_id": "TEST-006",
+    "supplier": "Summit Industrial",
+    "part": "Hex Nuts"
+  }
+]

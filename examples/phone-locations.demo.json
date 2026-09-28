@@ -1,0 +1,10 @@
+{
+  "example_coordinates": true,
+  "coordinate_frame": "example-marker-floor",
+  "locations": [
+    {"location_id": "ZONE-A", "name": "Storage zone A", "role": "placement", "x": 2.0, "y": 3.0},
+    {"location_id": "ZONE-B", "name": "Storage zone B", "role": "placement", "x": 7.0, "y": 3.0},
+    {"location_id": "ZONE-C", "name": "Storage zone C", "role": "placement", "x": 12.0, "y": 3.0},
+    {"location_id": "TRUCK-01", "name": "Truck loading bay", "role": "collection"}
+  ]
+}

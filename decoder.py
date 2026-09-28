@@ -16,6 +16,8 @@ class DecodedBox:
     supplier: Optional[str] = None
     part: Optional[str] = None
     raw: str = ""
+    # Barcode bounds in this image/crop, not the optional detector's box bounds.
+    rect: Optional[tuple[int, int, int, int]] = None
 
 
 def _parse_payload(raw: str) -> DecodedBox:
@@ -46,7 +48,10 @@ def decode_region(image: np.ndarray) -> list[DecodedBox]:
         except Exception:
             log.exception("failed to decode symbol bytes")
             continue
-        results.append(_parse_payload(raw))
+        decoded = _parse_payload(raw)
+        decoded.rect = (sym.rect.left, sym.rect.top, sym.rect.width, sym.rect.height)
+        if decoded.box_id:
+            results.append(decoded)
     return results
 
 

@@ -1,4 +1,5 @@
 import json
+import math
 import os
 from dataclasses import dataclass, field
 
@@ -50,6 +51,7 @@ def _load_box_classes() -> tuple:
 
 @dataclass
 class Config:
+    demo_mode: bool = os.getenv("PACKTRACK_DEMO", "0") == "1"
     db_url: str = os.getenv("PACKTRACK_DB_URL", "sqlite:///./packtrack.db")
 
     api_host: str = os.getenv("PACKTRACK_API_HOST", "127.0.0.1")
@@ -61,6 +63,8 @@ class Config:
     cameras: dict = field(default_factory=lambda: _load_cameras())
 
     scan_interval_s: float = float(os.getenv("PACKTRACK_SCAN_INTERVAL", "5.0"))
+    stale_after_s: float = float(os.getenv("PACKTRACK_STALE_AFTER", "60"))
+    reconnect_delay_s: float = float(os.getenv("PACKTRACK_RECONNECT_DELAY", "3"))
 
     yolo_weights: str = os.getenv("PACKTRACK_YOLO_WEIGHTS", "yolov8n.pt")
     # Class ids treated as "box-like". Defaults to COCO 73 (book), the nearest
@@ -69,6 +73,12 @@ class Config:
     # or to "all" to keep every class the model reports.
     box_class_ids: tuple = field(default_factory=lambda: _load_box_classes())
     yolo_confidence: float = float(os.getenv("PACKTRACK_YOLO_CONF", "0.25"))
+
+    def __post_init__(self):
+        for name in ("scan_interval_s", "stale_after_s", "reconnect_delay_s"):
+            value = getattr(self, name)
+            if not math.isfinite(value) or value <= 0:
+                raise ValueError(f"{name} must be a positive, finite number")
 
 
 cfg = Config()

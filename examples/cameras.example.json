@@ -1,0 +1,22 @@
+{
+  "cameras": [
+    {
+      "camera_id": "FLOOR-A",
+      "source": 0,
+      "role": "placement",
+      "calibration": "floor-calibration.synthetic.json",
+      "interval_s": 0.5,
+      "confirmations": 2,
+      "max_motion_px": 15
+    },
+    {
+      "camera_id": "TRUCK-01",
+      "source": 1,
+      "role": "collection",
+      "roi": [100, 100, 1000, 500],
+      "interval_s": 0.5,
+      "confirmations": 2,
+      "max_motion_px": 15
+    }
+  ]
+}

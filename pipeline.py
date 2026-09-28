@@ -39,24 +39,18 @@ def process_frame(frame, station_id: str, detector: "BoxDetector | None") -> int
         except DetectorUnavailable as e:
             log.warning("%s falling back to whole-frame decode", e)
 
-    # With no detector (or a placeholder COCO model that finds nothing), decode
-    # the whole frame so barcode-only workflows still work.
-    if not detections:
-        n = 0
-        for d in decode_region(frame):
-            if _post_scan(d.box_id, station_id, d.supplier, d.part, None):
-                n += 1
-        return n
-
-    n = 0
+    # Prefer crop coordinates, but always recover labels missed by detection.
+    # Deduplicate overlapping crops and the whole-frame pass before posting.
+    decoded = {}
     for det in detections:
         for d in decode_region(crop(frame, det)):
-            if _post_scan(
-                d.box_id, station_id, d.supplier, d.part,
-                (det.x, det.y, det.w, det.h),
-            ):
-                n += 1
-    return n
+            decoded.setdefault(d.box_id, (d, (det.x, det.y, det.w, det.h)))
+    for d in decode_region(frame):
+        decoded.setdefault(d.box_id, (d, None))
+    return sum(
+        _post_scan(d.box_id, station_id, d.supplier, d.part, bbox)
+        for d, bbox in decoded.values()
+    )
 
 
 def run_station(station_id: str, source, detect: bool = True, once: bool = False) -> int:

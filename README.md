@@ -1,137 +1,134 @@
-# PackTrack — Factory Box Tracker
+# PackTrack
 
-Tracks empty packaging boxes on a factory floor. Fixed cameras watch each
-station; the pipeline detects box regions, decodes the QR/barcode on each one,
-and logs the box's location, type and supplier so logistics knows what to
-collect and from where.
+Camera-driven box tracking for the factory floor. Floor cameras read unique box
+barcodes and store calibrated x,y positions in metres. A confirmed sighting inside
+a truck camera's collection region marks a box collected. The dashboard shows
+floor positions, counts, supplier totals, collection trends and camera evidence.
 
-```
-Camera / video / still image
-  -> capture.py    grab a frame on an interval
-  -> detector.py   YOLOv8 finds box regions          (optional, see Limitations)
-  -> decoder.py    pyzbar reads the QR in each crop
-  -> api.py        POST /scan logs id, station, supplier, bbox
-  -> dashboard.py  box locations + supplier pickup queue
-```
+## Start the interactive prototype
 
-## Requirements
-
-- **Python 3.10+** (3.12 recommended). The code uses `X | None` annotations and
-  builtin generics, so 3.9 will not run it.
-- **zbar**, the native library `pyzbar` binds to. Without it `pyzbar` fails at
-  import:
+Python 3.10+ (3.12 recommended) and the native zbar library are required. On macOS:
 
 ```bash
 brew install zbar
-```
-
-On Apple Silicon, note that an x86_64 Anaconda will not work as the interpreter
-unless Rosetta is installed — use a native Python.
-
-## Setup
-
-```bash
 python3.12 -m venv .venv
 .venv/bin/pip install -r requirements.txt
+.venv/bin/python launch.py
 ```
 
-## Verify it works
+Open **http://127.0.0.1:8501**. Keep the terminal running. Ctrl-C stops the API and
+dashboard. If ports are occupied:
 
 ```bash
+.venv/bin/python launch.py --api-port 8010 --dashboard-port 8510
+```
+
+Then open **http://127.0.0.1:8510**.
+
+The default mode uses a temporary database and generated QR camera scenes. It
+does not open a webcam or change an existing `packtrack.db`.
+
+### Try the workflow
+
+1. The demo places six labelled boxes across two calibrated camera views.
+2. Inspect their positions on **Floor overview** and their details in **Box register**.
+3. Select a box in **Try a truck pickup** and click **Load into truck**. The demo
+   generates a truck-camera frame, decodes its QR, confirms it inside the truck
+   region, and records a collection event through the same tracking logic.
+4. Watch the floor count decrease and the collection total, supplier chart,
+   collection history and camera activity update automatically.
+5. **Auto-play pickups** collects one box every 12 seconds. After every box has
+   been collected, **New batch** creates fresh unique IDs for another demonstration.
+
+The floor map refreshes every two seconds. It separates coordinate frames and
+shows stale positions in amber. Collected positions are hidden by default; enable
+**Show collected positions** to see where those boxes were last placed.
+
+## Test QR labels
+
+The **Test QR labels** tab displays six examples and offers downloads. Files are
+also included in the project:
+
+- [Printable sheet](assets/qr/test-labels.png)
+- [All six individual labels + sheet + payloads](assets/qr/test-labels.zip)
+- [QR payload manifest](assets/qr/payloads.json)
+
+IDs are `TEST-001` through `TEST-006`, across three example suppliers. Print one
+unique QR per box and preserve its white border. QR payloads contain identity,
+supplier and part type; position and collection state come from camera observations.
+
+```json
+{"box_id":"TEST-001","supplier":"Acme Components","part":"M6 Bolts"}
+```
+
+Generate the files again with `.venv/bin/python tools/make_labels.py`.
+
+## Connect real cameras
+
+Follow [Camera setup and calibration](docs/CAMERAS.md). Replace the synthetic
+calibration with measured reference points and configure a region **inside the truck**.
+Then launch the entire app and camera runner together:
+
+```bash
+.venv/bin/python launch.py --config cameras.json
+```
+
+This mode uses your configured cameras and persistent application database. It
+hides the demo controls. **Physical coordinates require calibration at the barcode
+height.** The current planar method assumes a consistent barcode height; arbitrary
+stacking, varying label heights and significant lens distortion require additional
+positioning work. The sample coordinates are not measurements of your factory.
+
+## Verify the installation
+
+```bash
+.venv/bin/python -m unittest discover -s tests -v
+.venv/bin/python tools/verify_tracking.py
 ./smoke_test.sh
 ```
 
-Boots the API against a scratch database, renders test frames, runs the
-pipeline, and asserts the full decode → POST → query → aggregate chain. The
-YOLO step is skipped automatically if the detection extras are not installed.
+`verify_tracking.py` is an automated command-line check: it prints PASS results
+and exits. It does not launch the dashboard. The older `tools/demo_part_a.py`
+command remains a compatibility alias for that check. **Use `launch.py` for the app.**
 
-## Running it
-
-Three processes. The API first:
-
-```bash
-.venv/bin/python -m uvicorn api:app --port 8000
-```
-
-The dashboard (http://127.0.0.1:8501):
-
-```bash
-.venv/bin/python -m streamlit run dashboard.py
-```
-
-The capture pipeline. Generate a test frame first if you have no camera:
-
-```bash
-.venv/bin/python tools/make_test_qr.py --scene
-.venv/bin/python pipeline.py --source testdata/scene.png --no-detect
-```
-
-### Pipeline options
-
-| Flag | Meaning |
-| --- | --- |
-| `--source` | USB index (`0`), RTSP URL, or path to a video or still image |
-| `--station` | Run one station instead of every configured one |
-| `--no-detect` | Skip YOLO and decode whole frames |
-| `--once` | Process a single frame and exit |
-
-With no `--source`, every station in `PACKTRACK_CAMERAS` runs concurrently in
-one process.
+The checks cover calibration, camera regions, confirmation, placement/collection,
+late and concurrent events, offline retry, dashboard controls and supplier totals.
+Test databases are temporary. Real camera/lens/lighting accuracy still needs field
+validation. The optional YOLO check runs only if `requirements-detect.txt` is installed;
+the calibrated barcode workflow does not need YOLO.
 
 ## Configuration
 
-All settings are environment variables, read in `config.py`.
-
-| Variable | Default | Notes |
+| Setting | Default | Purpose |
 | --- | --- | --- |
-| `PACKTRACK_CAMERAS` | `STATION-01=0` | `STATION=source` pairs, or JSON. Sources keep their type, so USB indices, file paths and RTSP URLs all work. |
-| `PACKTRACK_SCAN_INTERVAL` | `5.0` | Seconds between frames. For video files this means seconds of *footage*. |
-| `PACKTRACK_DB_URL` | `sqlite:///./packtrack.db` | Any SQLAlchemy URL. |
-| `PACKTRACK_API_BASE_URL` | `http://127.0.0.1:8000` | Where the pipeline and dashboard post/read. |
-| `PACKTRACK_BOX_CLASSES` | `73` | Detector class filter, or `all`. See Limitations. |
-| `PACKTRACK_YOLO_WEIGHTS` | `yolov8n.pt` | Path to a custom-trained model once one exists. |
+| `PACKTRACK_DB_URL` | `sqlite:///./packtrack.db` | Persistent API database in real-camera mode |
+| `PACKTRACK_API_BASE_URL` | `http://127.0.0.1:8000` | API for independently started processes |
+| `PACKTRACK_STALE_AFTER` | `60` | Seconds before an uncollected box needs a location check |
+| `PACKTRACK_RECONNECT_DELAY` | `3` | Delay between camera reconnection attempts |
 
-Several cameras at once:
+Camera source, role, calibration, region, scan interval and confirmation settings
+are in the JSON passed to `--config`; see the camera guide. Camera observations
+are saved to `camera-outbox.db` before delivery. Retry pending events without
+opening cameras using `.venv/bin/python track.py --flush-only`.
 
-```bash
-export PACKTRACK_CAMERAS="LINE-A=rtsp://cam1.local/s1,LINE-B=rtsp://cam2.local/s1,LINE-C=0"
-```
+## API and data
 
-## API
+API docs are at `/docs` on the API port (8000 by default).
 
 | Endpoint | Purpose |
 | --- | --- |
-| `POST /scan` | Log a decoded box. Upserts: a re-sighting bumps `last_seen` and does not overwrite a manually set status. |
-| `GET /boxes` | List boxes, filterable by `station`, `supplier`, `status`. |
-| `PATCH /boxes/{box_id}` | Update status (`active` / `empty` / `collected`). |
-| `GET /dashboard` | Totals, per-station counts, supplier pickup queue. |
+| `POST /observations` | Record timestamped camera evidence and update placement/collection |
+| `GET /boxes` | Box status, last floor position, supplier and collection camera/time |
+| `GET /boxes/{box_id}/observations` | Recent evidence for a box |
+| `GET /dashboard` | Counts, supplier breakdown and hourly collection totals |
+| `GET /activity` | Recent camera observations and whether they changed state |
 
-Interactive docs at `/docs` while the API is running.
+Collection is terminal in this prototype; another floor sighting cannot reopen a
+collected box. New demo batches use new IDs. Box coordinates are preserved after
+collection. Missing floor sightings do not imply collection. Supplier identity
+comes from the barcode; the collection camera identifies a loading view, not a
+truck registration. Collection charts use UTC.
 
-## Optional: YOLO detection
-
-```bash
-.venv/bin/pip install -r requirements-detect.txt
-```
-
-Roughly 2 GB, because it pulls PyTorch — which is why it is kept out of the
-core requirements. Without it the pipeline decodes whole frames, which is the
-path that actually works today.
-
-## Limitations
-
-These are known and deliberate for a prototype:
-
-- **Detection quality is unproven.** The default class filter is COCO 73
-  ("book"), the nearest rectangular stand-in — COCO has no cardboard-box class.
-  It reliably finds nothing on real packaging. The `detect → crop → decode`
-  wiring is tested and correct, but useful detection needs a model trained on
-  labeled box images. Until then, run with `--no-detect`.
-- **RTSP and USB webcams are untested.** Both share a code path that is
-  exercised only by file-based sources. A webcam additionally needs macOS
-  camera permission granted to your terminal (System Settings → Privacy &
-  Security → Camera).
-- **A box seen at two stations keeps the most recent sighting.** Fine while
-  each box lives at one station; revisit if boxes are tracked in transit.
-- **No auth, rate limiting, or deployment config**, and a single process
-  throughout — per the prototype scope.
+Older `/scan` and manual status endpoints remain for compatibility but cannot
+modify calibrated, camera-tracked boxes. Schema changes are additive. This is a
+local prototype without authentication; public deployment is not configured.
