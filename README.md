@@ -44,6 +44,34 @@ The floor map refreshes every two seconds. It separates coordinate frames and
 shows stale positions in amber. Collected positions are hidden by default; enable
 **Show collected positions** to see where those boxes were last placed.
 
+## Review uploaded factory videos
+
+Run the standalone video workspace (no tracking API required):
+
+```bash
+.venv/bin/python -m streamlit run video_app.py --server.address 127.0.0.1 --server.port 8510
+```
+
+Open **http://127.0.0.1:8510**, upload an MP4/MOV clip, and click **Analyze video**.
+The regular dashboard also includes a **Video review** page in its sidebar.
+Use **Local barcode scan** without an API key, or enter a short-term Bedrock key
+in the password field for **Nova + barcode scan**. The default AWS region is
+`us-east-2`; the app uses `us.amazon.nova-2-lite-v1:0`. A server may instead supply
+`AWS_BEARER_TOKEN_BEDROCK`. Keys are not written to project files.
+
+Nova reviews 4–20 timestamped still frames in batches of four; selected frames
+are sent to AWS and incur inference charges. Local QR/barcode decoding scans
+up to 600 additional frames. Clips are limited to 200 MB, 10 minutes and 4K.
+MP4/H.264 is recommended for browser playback. Set `PACKTRACK_SAMPLE_VIDEO` to
+a local video path to preload an example without copying it into the repository.
+
+Results include per-frame container estimates, model-transcribed printed labels,
+decoded barcode payloads with image pixel coordinates, frame previews and JSON/CSV
+downloads. Review model readings against the images. Repeated part labels are not
+unique box identities; sampled frames can miss brief events. Handheld footage alone
+does not establish floor coordinates or confirmed collection, so this review does
+not modify inventory. Uploaded files are temporary; download a report to retain it.
+
 ## Test QR labels
 
 The **Test QR labels** tab displays six examples and offers downloads. Files are
@@ -62,6 +90,27 @@ supplier and part type; position and collection state come from camera observati
 ```
 
 Generate the files again with `.venv/bin/python tools/make_labels.py`.
+
+## Scan from a handheld phone
+
+```bash
+.venv/bin/python launch.py --phone
+```
+
+Open **Connect phone** in the dashboard and scan the pairing QR on your phone.
+Both devices need the same Wi-Fi. Scan a **location marker**, then the **box QR**;
+the box appears at that marker's assigned x,y position. For collection, scan the
+truck marker and then each loaded box. Phone mode uses a persistent, separate
+`packtrack-phone.db` by default and turns off the synthetic demonstration.
+
+- [Phone setup and measured marker configuration](docs/PHONE.md)
+- [Example location marker sheet](assets/locations/location-markers.png)
+- [All example location markers](assets/locations/location-markers.zip)
+
+The supplied locations use example coordinates. A marker assigns a location;
+a handheld QR scan alone does not measure the box's exact floor coordinates.
+Use **Take photo / scan QR** for the quick local-network setup. Continuous browser
+video requires HTTPS with a certificate trusted by the phone.
 
 ## Connect real cameras
 

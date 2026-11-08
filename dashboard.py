@@ -83,7 +83,7 @@ def register_rows(boxes):
 def draw_floor(boxes):
     frames = sorted({b["coordinate_frame"] for b in boxes if b["coordinate_frame"]})
     if not frames:
-        st.info("No calibrated positions yet. Start a configured floor camera to see boxes here.")
+        st.info("No floor positions yet. Scan a location marker and a box label, or connect a calibrated camera.")
         return
     c1, c2 = st.columns([3, 2])
     selected_frame = c1.selectbox("Floor coordinate frame", frames, key="floor_frame")
